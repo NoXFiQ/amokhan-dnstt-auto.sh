@@ -1,0 +1,1 @@
+# amokhan-dnstt-auto.sh
