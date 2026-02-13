@@ -9,7 +9,7 @@ set -euo pipefail
 ############################
 # CONFIG (Interactive)
 ############################
-read -p "Enter your TDOMAIN (e.g., ns-sn.twinstech.online): " TDOMAIN
+read -p "Enter your TDOMAIN (e.g., ns-sn.amokhan.online): " TDOMAIN
 MTU=1800
 DNSTT_PORT=5300
 DNS_PORT=53
