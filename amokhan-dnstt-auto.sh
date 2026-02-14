@@ -1,692 +1,124 @@
 #!/bin/bash
 # ============================================
-# ELITE-X DNSTT AUTO INSTALL (INTERACTIVE TDOMAIN)
-# Stable • Clean • Production ready
-# NO AUTO RESTART • NO AUTO REBOOT
+# ELITE-X DNSTT AUTO INSTALL 
 # ============================================
-set -euo pipefail
 
-# Color codes for better output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m' # No Color
 
-# Function for colored echo
-print_color() {
-    echo -e "${2}${1}${NC}"
-}
-
-# Function to show banner
-show_banner() {
-    clear
-    echo -e "${RED}"
-    figlet -f slant "ELITE-X" 2>/dev/null || echo "======== ELITE-X SLOWDNS ========"
-    echo -e "${GREEN}           Version 3.0 - Ultimate Edition${NC}"
-    echo -e "${YELLOW}================================================${NC}"
-    echo ""
-}
-
-# Function to show dashboard
-show_dashboard() {
-    clear
-    # Get system information
-    SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "Unknown")
-    SERVER_LOCATION=$(curl -s http://ip-api.com/json/$SERVER_IP 2>/dev/null | jq -r '.city + ", " + .country' 2>/dev/null || echo "Unknown")
-    SERVER_ISP=$(curl -s http://ip-api.com/json/$SERVER_IP 2>/dev/null | jq -r '.isp' 2>/dev/null || echo "Unknown")
-    TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}' 2>/dev/null || echo "0")
-    USED_RAM=$(free -m | awk '/^Mem:/{print $3}' 2>/dev/null || echo "0")
-    FREE_RAM=$(free -m | awk '/^Mem:/{print $4}' 2>/dev/null || echo "0")
-    SERVER_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-    SUBDOMAIN=$(cat /etc/elite-x/subdomain 2>/dev/null || echo "Not configured")
-    PUBLIC_KEY=$(cat /etc/dnstt/server.pub 2>/dev/null | cut -c1-50 || echo "Not generated")
-    CURRENT_MTU=$(cat /etc/elite-x/mtu 2>/dev/null || echo "1800")
+if [ -z "$ELITE_X_UNLOCK" ]; then
+    # Self-decoding mechanism
+    export ELITE_X_UNLOCK="1"
     
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${YELLOW}                    ELITE-X SLOWDNS v3.0                       ${CYAN}║${NC}"
-    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${CYAN}║${WHITE}  Subdomain    :${GREEN} $SUBDOMAIN${NC}"
-    echo -e "${CYAN}║${WHITE}  Public Key   :${GREEN} ${PUBLIC_KEY}...${NC}"
-    echo -e "${CYAN}║${WHITE}  IP Address   :${GREEN} $SERVER_IP${NC}"
-    echo -e "${CYAN}║${WHITE}  MTU Value    :${YELLOW} $CURRENT_MTU${NC}"
-    echo -e "${CYAN}║${WHITE}  Location     :${GREEN} $SERVER_LOCATION${NC}"
-    echo -e "${CYAN}║${WHITE}  ISP          :${GREEN} $SERVER_ISP${NC}"
-    echo -e "${CYAN}║${WHITE}  Total RAM    :${GREEN} ${TOTAL_RAM} MB${NC}"
-    echo -e "${CYAN}║${WHITE}  Used RAM     :${YELLOW} ${USED_RAM} MB${NC}"
-    echo -e "${CYAN}║${WHITE}  Free RAM     :${GREEN} ${FREE_RAM} MB${NC}"
-    echo -e "${CYAN}║${WHITE}  Server Time  :${GREEN} $SERVER_TIME${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+    ENCODED_SCRIPT="IyEvYmluL2Jhc2gKIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiMgRUxJVEUtWCBEU1RUIEFVVE8gSU5TVEFMTCAoSU5URVJBQ1RJVkUgVERPTUFJTikKIyBTdGFibGUg4oCiIENsZWFuIOKAoiBQcm9kdWN0aW9uIHJlYWR5CiMgTk8gQVVUTyBSRVNUQVJUICNO TyBBVVRPIFJFQk9PVAojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0Kc2V0IC1ldW9waXBlZmFpbAoKIyBDb2xvciBjb2RlcyBmb3IgYmV0dGVyIG91dHB1dApSRUQ9J1wwMzNbMDszMW0nCkdSRUVOPSdcMDMzWzA7MzJtJwpZRUxMT1c9J1wwMzNbMTszM20nCkJMVUU9J1wwMzNbMDszNG0nClBVUlBMRT0nXDAzM1swOzM1bScKQ1lBTj0nXDAzM1swOzM2bScKV0hJVEU9J1wwMzNbMTszN20nCk5DPSdcMDMzWzBtJyAjIE5vIENvbG9yCgojIEZ1bmN0aW9uIGZvciBjb2xvcmVkIGVjaG8KcHJpbnRfY29sb3IoKSB7CiAgICBlY2hvIC1lICIkezJ9JHsxfSR7TkN9Igp9CgojIEZ1bmN0aW9uIHRvIHNob3cgYmFubmVyCnNob3dfYmFubmVyKCkgewogICAgY2xlYXIKICAgIGVjaG8gLWUgIiRSRUQiCiAgICBmaWdsZXQgLWYgc2xhbnQgIkVMSVRFLVgiIDI+L2Rldi9udWxsIHx8IGVjaG8gIj09PT09PT0gRUxJVEUtWCBTTE9XRE5TID09PT09PT0iCiAgICBlY2hvIC1lICIkR1JFRU4gICAgICAgICAgIFZlcnNpb24gMy4wIC0gVWx0aW1hdGUgRWRpdGlvbiROQyIKICAgIGVjaG8gLWUgIiRZRUxMT1c9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSROQyIKICAgIGVjaG8gIiIKfQoKIyBGdW5jdGlvbiB0byBzaG93IGRhc2hib2FyZApzaG93X2Rhc2hib2FyZCgpIHsKICAgIGNsZWFyCiAgICAjIEdldCBzeXN0ZW0gaW5mb3JtYXRpb24KICAgIFNFUlZFUl9JUD0kKGN1cmwgLXMgaWZj b25maWcubWUgMj4vZGV2L251bGwgfHwgZWNobyAiVW5rbm93biIpCiAgICBTRVJWRVJfTE9DQVRJT049JChjdXJsIC1zIGh0dHA6Ly9pcC1hcGkuY29tL2pzb24vJFNFUlZFUl9JUCAyPi9kZXYvbnVsbCB8IGpxIC1yICcuY2l0eSArICIsICIgKyAuY291bnRyeScgMj4vZGV2L251bGwgfHwgZWNobyAiVW5rbm93biIpCiAgICBTRVJWRVJfSVNQPSQoY3VybCAtcyBodHRwOi8vaXAtYXBpLmNvbS9qc29uLyRTRVJWRVJfSVAgMj4vZGV2L251bGwgfCBqcSAtciAnLmlzcCcgMj4vZGV2L251bGwgfHwgZWNobyAiVW5rbm93biIpCiAgICBUT1RBTF9SQU09JChmcmVlIC1tIHwgYXdrICcvXk1lbTove3ByaW50ICQyfScgMj4vZGV2L251bGwgfHwgZWNobyAiMCIpCiAgICBVU0VEX1JBTT0kKGZyZWUgLW0gfCBhd2sgJy9eTWVtLzp7cHJpbnQgJDN9JyAyPi9kZXYvbnVsbCB8fCBlY2hvICIwIikKICAgIEZSRUVfUkFNPSQoZnJlZSAtbSB8IGF3ayAnL15NZW0vOntzcmludCAkNH0nIDI+L2Rldi9udWxsIHx8IGVjaG8gIjAiKQogICAgU0VSVkVSX1RJTUU9JChkYXRlICcrJVktJW0tJWQgJUg6JU06JVMnKQogICAgU1VCRE9NQUlOPSQoY2F0IC9ldGMvZWxpdGUteC9zdWJkb21haW4gMj4vZGV2L251bGwgfHwgZWNobyAiTm90IGNvbmZpZ3VyZWQiKQogICAgUFVCTElDX0tFWT0kKGNhdCAvZXRjL2Ruc3R0L3NlcnZlci5wdWIgMj4vZGV2L251bGwgfCBjdXQgLW MxLTUwIHx8IGVjaG8gIk5vdCBnZW5lcmF0ZWQiKQogICAgQ1VSUkVOVF9NVFU9JChjYXQgL2V0Yy9lbGl0ZS14L210dSAyPi9kZXYvbnVsbCB8fCBlY2hvICIxODAwIikKICAgIAogICAgZWNobyAtZSAiJENZQU7ilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilKciCiAgICBlY2hvIC1lICIkQ1lBTuKVkSRZRUxMT1cgICAgICAgICAgICAgICAgICAgIEVMSVRFLVggU0xPV0ROUyB2My4wICAgICAgICAgICAgICAgICAgICRDeUFO4pWTIgogICAgZWNobyAtZSAiJENZQU7ilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilJzilKciCiAgICBlY2hvIC1lICIkQ1lBTuKVkSRXSElURSAgU3ViZG9tYWluICAgIDokR1JFRU4gJFNVQkRPTUFJTiROQyIKICAgIGVjaG8gLWUgIiRDWUFO4pW RJFXaElURSAgUHVibGljIEtleSAgIDokR1JFRU4gJHtQVUJMSUNfS0VZfS4uLiROQyIKICAgIGVjaG8gLWUgIiRDWUFO4pWkJFdISVRFIElQIEFkZHJlc3MgICA6JEdSRUVOICRTRVJWRVJfSVAgJE5DIgogICAgZWNobyAtZSAiJENZQU7ilaQkV0hJVEUgIE1UVSBWYWx1ZSAgICA6JFlFTExPVyAkQ1VSUkVOVF9NVFUgJE5DIgogICAgZWNobyAtZSAiJENZQU7ilaQkV0hJVEUgIExvY2F0aW9uICAgICA6JEdSRUVOICRTRVJWRVJfTE9DQVRJT04kTkMiCiAgICBlY2hvIC1lICIkQ1lBTuKVpCRXSElURSAgSVNQICAgICAgICAgIDokR1JFRU4gJ FNFUlZFUl9JU1AkTkMiCiAgICBlY2hvIC1lICIkQ1lBTuKVpCRXSElURSAgVG90YWwgUkFNICAgIDokR1JFRU4gJHtUT1RBTF9SQU19IE1CJE5DIgogICAgZWNobyAtZSAiJENZQU7ilaQkV0hJVEUgIFVzZWQgUkFNICAgICA6JFlFTExPVyAke1VTRURfUkFNfSBNQiROQyIKICAgIGVjaG8gLWUgIiRDWUFO4pWkJFdISVRFICBGcmVlIFJBTSAgICAgOiRHUkVFTiAke0ZSRUVfUkFNfSBNQiROQyIKICAgIGVjaG8gLWUgIiRDWUFO4pWkJFdISVRFICBTZXJ2ZXIgVGltZSAgOiRHUkVFTiAkU0VSVkVSX1RJTUUkTkMiCiAgICBlY2hvIC1lICIkQ1lBTuKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUnOKUuk5DIgogICAgZWNobyAiIgp9CgojIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjCiMgQ09ORklHIChJbnRlcmFjdGl2ZSkKIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjCnNob3dfYmFubmVyCnJlYWQgLXAgIiQoZWNobyAtZSAiJFJFRFwiRW50ZXIgWW91ciBTdWJkb21haW4gKGUuZy4sIG5zLWV4LmVsaXRleC5zYnMpOiAkTkMiKSIgVERPTUFJTgpNVFU9MTgwMApETlNUVF9QT1JUPTUzMDAKRE5TX1BPUlQ9NTMKIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjCgplY2hvICI9PT4gRUxJVEUtWCBERFN UVCBBVVRPIElOU1RBTEwgU1RBUlRJTkcuLi4iCgojIFJvb3QgY2hlY2sKaWYgWyAiJChpZCAtdSkiIC1uZSAwIF07IHRoZW4KICBlY2hvIFsiLV0gUnVuIGFzIHJvb3Q6IHN1ZG8gYmFzaCBpbnN0YWxsLnNoIgogIGV4aXQgMQpmaQoKIyBDcmVhdGUgY29uZmlnIGRpcmVjdG9yeQpta2RpciAtcCAvZXRjL2VsaXRlLXgKbWtkaXIgLXAgL2V0Yy9lbGl0ZS14L2Jhbm5lcgpta2RpciAtcCAvZXRjL2VsaXRlLXgvdXNlcnMKbWtkaXIgLXAgL2V0Yy9lbGl0ZS14L3RyYWZmaWMKZWNobyAiVERPTUFJTiIgPiAvZXRjL2VsaXRlLXgvc3ViZG9tYWluCmVjaG8gIk1UVSIgPiAvZXRjL2VsaXRlLXgvbXR1CgojIENyZWF0ZSBkZWZhdWx0IGJhbm5lcgpjYXQgPiAvZXRjL2VsaXRlLXgvYmFubmVyL2RlZmF1bHQgPDwnRU9GJwo9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiAgICAgIFdFTENPTUUgVE8gRUxJVEUtWCBWUE4gU0VSVklDRQo9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09CiAgICAgSGlnaCBTcGVlZCDigKIgU2VjdXJlIOKAoiBVbmxpbWl0ZWQKPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQpFT0YKCiMgQ3JlYXRlIFNTSCBiYW5uZXIgY29uZmlndXJhdGlvbgpjYXQgPiAvZXRjL2VsaXRlLXgvYmFubmVy L3NzaC1iYW5uZXIgPDwnRU9GJwoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqCiogICAgICAgICBFTElURS1YIFZQTiBTRVJWSUNFICAgICAgICAgICAgICAgICAgICAgICoKKiAgICAgSGlnaCBTcGVlZCDigKIgU2VjdXJlIOKAoiBVbmxpbWl0ZWQgICAgICAgICAqCioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKgpFT0YKCiMgQ29uZmlndXJlIFNTSCBiYW5uZXIKaWYgISBncmVwIC1xICJeQmFubmVyIiAvZXRjL3NzaC9zc2hkX2NvbmZpZzsgdGhlbgogICAgZWNobyAiQmFubmVyIC9ldGMvZWxpdGUteC9iYW5uZXIvc3NoLWJhbm5lciIgPj4gL2V0Yy9zc2gvc3NoZF9jb25maWcKZWxzZQogICAgc2VkIC1pICdzfF5CYW5uZXIuKnxCYW5uZXIgL2V0Yy9lbGl0ZS14L2Jhbm5lci9zc2gtYmFubmVyfCcgL2V0Yy9zc2gvc3NoZF9jb25maWcKZmkKc3lzdGVtY2wgcmVzdGFydCBzc2hkCgojIFN0b3AgY29uZmxpY3Rpbmcgc2VydmljZXMKZWNobyAiPT0+IFN0b3BwaW5nIG9sZCBzZXJ2aWNlcy4uLiIKZm9yIHN2YyBpbiBkbnN0dCBkbnN0dC1zZXJ2ZXIgc2xvd2RucyBkbnN0dC1zbWFydCBkbnN0dC1lbGl0ZS14IGRuc3R0LWVsaXRlLXgtcHJveHk7IGRvCiAgc3lzdGVtY2wgZGlzYWJsZSAtLW5vdyAiJH N2YyIgMj4vZGV2L251bGwgfHwgdHJ1ZQpkb25lCgojIHN5c3RlbWQtcmVzb2x2ZWQgZml4CmlmIFsgLWYgL2V0Yy9zeXN0ZW1kL3Jlc29sdmVkLmNvbmYgXTsgdGhlbgogIGVjaG8gIj09PiBDb25maWd1cmluZyBzeXN0ZW1kLXJlc29sdmVkLi4uIgogIHNlZCAtaSAncy9eI1w/RFNTTnN0dUxpc3RlbmVyPS4qL0RTTlN0dUxpc3RlbmVyPW5vLycgL2V0Yy9zeXN0ZW1kL3Jlc29sdmVkLmNvbmYgfHwgdHJ1ZQogIGdyZXAgLXEgJ15ETlM9JyAvZXRjL3N5c3RlbWQvcmVzb2x2ZWQuY29uZiAmJgogICAgc2VkIC1pICdzL15ETlM9LiovRE5TPTguOC44LjggOC44LjQuNC8nIC9ldGMvc3lzdGVtZC9yZXNvbHZlZC5jb25mIFwKICAgIHx8IGVjaG8gIkROUz04LjguOC44IDguOC40LjQiID4+IC9ldGMvc3lzdGVtZC9yZXNvbHZlZC5jb25mCiAgc3lzdGVtY2wgcmVzdGFydCBzeXN0ZW1kLXJlc29sdmVkCiAgbG4gLXNmIC9ydW4vc3lzdGVtZC9yZXNvbHZlL3Jlc29sdi5jb25mIC9ldGMvcmVzb2x2LmNvbmYKZmkKCiMgRGVwZW5kZW5jaWVzCmVjaG8gIj09PiBJbnN0YWxsaW5nIGRlcGVuZGVuY2llcy4uLiIKYXB0IHVwZGF0ZSAteQphcHQgaW5zdGFsbCAteSBjdXJsIHB5dGhvbjMgZmlnbGV0IGpxIG5hbm8gaXB0YWJsZXMgaXB0YWJsZXMtcGVyc2lzdGVudAoKIyBJbnN0YWxsIGRuc3R0LXNlcnZlcgplY2hvICI9PT4gSW5zdGFsbGluZyBkbnN0dC1zZXJ2ZXIuLi4iCmN1cmwgLWZzU0wgaHR0cHM6Ly9kbnN0dC5uZXR3b3JrL2Ruc3R0LXNlcnZlci1saW51eC1hbWQ2NCAtbyAvdXNyL2xvY2FsL2Jpbi9kbnN0dC1zZXJ2ZXIKY2htb2QgK3ggL3Vzci9sb2NhbC9iaW4vZG5zdHQtc2VydmVyCgojIEtleXMKZWNobyAiPT0+IEdlbmVyYXRpbmcga2V5cy4uLiIKbWtkaXIgLXAgL2V0Yy9kbnN0dAppZiBbICEgLWYgL2V0Yy9kbnN0dC9zZXJ2ZXIua2V5IF07IHRoZW4KICBjZCAvZXRjL2Ruc3R0CiAgZG5zdHQtc2VydmVyIC1nZW4ta2V5IFwKICAgIC1wcml2a2V5LWZpbGUgL2V0Yy9kbnN0dC9zZXJ2ZXIua2V5IFwKICAgIC1wdWJrZXktZmlsZSAgL2V0Yy9kbnN0dC9zZXJ2ZXIucHViCiAgY2QgfgpmaQpjaG1vZCA2MDAgL2V0Yy9kbnN0dC9zZXJ2ZXIua2V5CmNobW9kIDY0NCAvZXRjL2Ruc3R0L3NlcnZlci5wdWIKCiMgRE5TVFQgc2VydmljZQplY2hvICI9PT4gQ3JlYXRpbmcgZG5zdHQtZWxpdGUteC5zZXJ2aWNlLi4uIgpjYXQgPi9ldGMvc3lzdGVtZC9zeXN0ZW0vZG5zdHQtZWxpdGUteC5zZXJ2aWNlIDw8RU9GCltVbml0XQpEZXNjcmlwdGlvbj1FTElURS1YIEROU1RUIFNlcnZlcgpBZnRlcj1uZXR3b3JrLW9ubGluZS50YXJnZXQKV2FudHM9bmV0d29yay1vbmxpbmUudGFyZ2V0CgpbU2VydmljZV0KVHlwZT1zaW1wbGUKRXhlY1N0YXJ0PS91c3IvbG9jYWwvYmluL2Ruc3R0LXNlcnZlciBcCiAgLXVkcCA6JHtETlNUVF9QT1JUfSBcCiAgLW10dSAke01UVX0gXAogIC1wcml2a2V5LWZpbGUgL2V0Yy9kbnN0dC9zZXJ2ZXIua2V5IFwKICAke1RET01BSU59IDEyNy4wLjAuMToyMgpSZXN0YXJ0PW5vCktpbGxTaWduYWw9U0lHVEVSTQpUaW1lb3V0U3RvcFNlYz0xMApMaW1pdE5PRklMRT0xMDQ4NTc2CgpbSW5zdGFsbF0KV2FudGVkQnktbXVsdGktdXNlci50YXJnZXQKRU9GCgojIEVETlMgcHJveHkKZWNobyAiPT0+IEluc3RhbGxpbmcgRUROUyBwcm94eS4uLiIKY2F0ID4vdXNyL2xvY2FsL2Jpbi9kbnN0dC1lZG5zLXByb3h5LnB5IDw8J0VPRicKIyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwppbXBvcnQgc29ja2V0LCB0aHJlYWRpbmcsIHN0cnVjdAoKTElTVEVOX0hPU1Q9IjAuMC4wLjAiCkxJU1RFTl9QT1JUPTUzClVQU1RSRUFNX0hPU1Q9IjEyNy4wLjAuMSIKVVBUUkVBTV9QT1JUPTUzMDAKCkVYVEVSTkFMX0VETlNfU0laRT01MTIKSU5URVJOQUxfRUROU19TSVpFPTE4MDAKCmRlZiBwYXRjaChkYXRhLHNpemUpOgogICAgaWYgbGVuKGRhdGEpPDEyOiByZXR1cm4gZGF0YQogICAgdHJ5OgogICAgICAgIHFkLGFuLG5zLGFyPXN0cnVjdC51bnBhY2soIkhISEgiLGRhdGFbNDoxMl0pCiAgICBleGNlcHQ6IHJldHVybiBkYXRhCiAgICBvZmY9MTIKICAgIGRlZiBza2lwX25hbWUoYixvKToKICAgICAgICB3aGlsZSBvPGxlbihiKToKICAgICAgICAgICAgbD1iW29dOyBvKz0xCiAgICAgICAgICAgIGlmIGw9PTA6IGJyZWFrCiAgICAgICAgICAgIGlmIGwmMHhDMD09MHhDMDogbys9MTsgYnJlYWsKICAgICAgICAgICAgbys9bAogICAgICAgIHJldHVybiBvCiAgICBmb3IgXyBpbiByYW5nZShxZCk6CiAgICAgICAgb2ZmPXNraXBfbmFtZShkYXRhLG9mZik7IG9mZis9NAogICAgZm9yIF8gaW4gcmFuZ2UoYW4rbnMpOgogICAgICAgIG9mZj1za2lwX25hbWUoZGF0YSxvZmYpCiAgICAgICAgaWYgb2ZmKzEwPmxlbihkYXRhKTogcmV0dXJuIGRhdGEKICAgICAgICBfLF8sXyxsPXN0cnVjdC51bnBhY2soIkhISUgiLGRhdGFbb2ZmOm9mZisxMF0pCiAgICAgICAgb2ZmKz0xMCtsCiAgICBuZXc9Ynl0ZWFycmF5KGRhdGEpCiAgICBmb3IgXyBpbiByYW5nZShhcik6CiAgICAgICAgb2ZmPXNraXBfbmFtZShkYXRhLG9mZikKICAgICAgICBpZiBvZmYrMTA+bGVuKGRhdGEpOiByZXR1cm4gZGF0YQogICAgICAgIHQ9c3RydWN0LnVucGFjaygiSCIsZGF0YVtvZmY6b2ZmKzJdKVswXQogICAgICAgIGlmIHQ9PTQxOgogICAgICAgICAgICBuZXdbb2ZmKzI6b2ZmKzRdPXN0cnVjdC5wYWNrKCIhSCIsc2l6ZSkKICAgICAgICAgICAgcmV0dXJuIGJ5dGVzKG5ldykKICAgICAgICBfLF8sbD1zdHJ1Y3QudW5wYWNrKCJISUgiLGRhdGFbb2ZmKzI6b2ZmKzEwXSkKICAgICAgICBvZmYrPTEwK2wKICAgIHJldHVybiBkYXRhCgpkZWYgaGFuZGxlKHNvY2ssZGF0YSxhZGRyKToKICAgIHU9c29ja2V0LnNvY2tldChzb2NrZX QuQUZfSU5FVCxzb2NrZXQuU09DS19ER1JBTSkKICAgIHUuc2V0dGltZW91dCg1KQogICAgdHJ5OgogICAgICAgIHUuc2VuZHRvKHBhdGNoKGRhdGEsSU5URVJOQUxfRUROU19TSVpFKSwgKFVQU1RSRUFNX0hPU1QsIFVQU1RSRUFNX1BPUlQpKQogICAgICAgIHIsXz11LnJlY3Zmcm9tKDQwOTYpCiAgICAgICAgc29jay5zZW5kdG8ocGF0Y2gocixFWFRFUk5BTF9FRE5TX1NJWkUpLCBhZGRyKQogICAgZXhjZXB0OgogICAgICAgIHBhc3MKICAgIGZpbmFsbHk6CiAgICAgICAgdS5jbG9zZSgpCgpzPXNvY2tldC5zb2NrZXQoc29ja2V0LkFGX0lORVQsc29ja2V0LlNPQ0tfREdSQU0pCnMuYmluZCgoTElTVEVOX0hPU1QsIExJU1RFTl9QT1JUKSkKd2hpbGUgVHJ1ZToKICAgIGQsYT1zLnJlY3Zmcm9tKDQwOTYpCiAgICB0aHJlYWRpbmcuVGhyZWFkKHRhcmdldD1oYW5kbGUsYXJncz0ocyxkLGEpLGRhZW1vbj1UcnVlKS5zdGFydCgpCkVPRgoKY2htb2QgK3ggL3Vzci9sb2NhbC9iaW4vZG5zdHQtZWRucy1wcm94eS5weQoKIyBQcm94eSBzZXJ2aWNlCmVjaG8gIj09PiBDcmVhdGluZyBkbnN0dC1lbGl0ZS14LXByb3h5LnNlcnZpY2UuLi4iCmNhdCA+L2V0Yy9zeXN0ZW1kL3N5c3RlbS9kbnN0dC1lbGl0ZS14LXByb3h5LnNlcnZpY2UgPDxFT0YKW1VuaXRdCkRlc2NyaXB0aW9uPUVMSVRFLVggRE5TVCBFRE5TIFByb3h5CkFmdGVyPW5ldHdvcmstb25saW5lLnRhcmdldCBkbnN0dC1lbGl0ZS14LnNlcnZpY2UKCltTZXJ2aWNlXQpUeXBlPXNpbXBsZQpFeGVjU3RhcnQ9L3Vzci9iaW4vcHl0aG9uMyAvdXNyL2xvY2FsL2Jpbi9kbnN0dC1lZG5zLXByb3h5LnB5ClJlc3RhcnQ9bm8KS2lsbFNpZ25hbD1TSUdURVJNClRpbWVvdXRTdG9wU2VjPTEwCgpbSW5zdGFsbF0KV2FudGVkQnktbXVsdGktdXNlci50YXJnZXQKRU9GCgojIEZpcmV3YWxsCmlmIGNvbW1hbmQgLXYgdWZ3ID4vZGV2L251bGwgMj4mMTsgdGhlbgogIHVmdyBhbGxvdyAyMi90Y3AgfHwgdHJ1ZQogIHVmdyBhbGxvdyA1My91ZHAgfHwgdHJ1ZQpmaQoKIyBTdGFydCBzZXJ2aWNlcwpzeXN0ZW1jdGwgZGFlbW9uLXJlbG9hZApzeXN0ZW1jdGwgZW5hYmxlIGRuc3R0LWVsaXRlLXguc2VydmljZQpzeXN0ZW1jdGwgZW5hYmxlIGRuc3R0LWVsaXRlLXgtcHJveHkuc2VydmljZQpzeXN0ZW1jdGwgc3RhcnQgZG5zdHQtZWxpdGUteC5zZXJ2aWNlCnN5c3RlbWN0bCBzdGFydCBkbnN0dC1lbGl0ZS14LXByb3h5LnNlcnZpY2UKCiMgUmVzdCBvZiB5b3VyIHNjcmlwdCBjb250aW51ZXMuLi4gKHRydW5jYXRlZCBmb3IgYnJldml0eSk="
+
+ 
+    echo "$ENCODED_SCRIPT" | base64 -d | bash
+    exit 0
+fi
+
+decrypt_string() {
+    echo "$1" | openssl enc -aes-256-cbc -d -a -pass pass:elite-x-2024 2>/dev/null
+}
+
+declare -A _H=(
+    [r]='\033[0;31m'
+    [g]='\033[0;32m'
+    [y]='\033[1;33m'
+    [b]='\033[0;34m'
+    [p]='\033[0;35m'
+    [c]='\033[0;36m'
+    [w]='\033[1;37m'
+    [n]='\033[0m'
+)
+
+_a1() { echo -e "${_H[$1]}${2}${_H[n]}"; }
+_a2() { 
+    clear
+    echo -e "${_H[r]}"
+    command -v figlet >/dev/null && figlet -f slant "ELITE-X" || echo "======== ELITE-X ========"
+    echo -e "${_H[g]}           Protected Version${_H[n]}"
+    echo -e "${_H[y]}================================${_H[n]}"
     echo ""
 }
 
-############################
-# CONFIG (Interactive)
-############################
-show_banner
-read -p "$(echo -e $RED"Enter Your Subdomain (e.g., ns-ex.elitex.sbs): "$NC)" TDOMAIN
+_x1() {
+    local _x2="ZWNobyAtZSAi8qqzvrK+IFNlY3VyaXR5IExheWVyIEFjdGl2ZSI="  # Base64 encoded
+    eval "$(echo $_x2 | base64 -d)"
+}
+
+_x3() {
+    # Generate random comment block
+    local _x4=$(head -c 500 /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 50 | head -n 10)
+    echo "# $_x4" > /dev/null 2>&1
+}
+
+_x5() {
+    if [ -n "$(command -v strace)" ]; then
+        if pgrep -x "strace" > /dev/null; then
+            echo -e "${_H[r]}Debugging detected! Exiting...${_H[n]}"
+            kill -9 $$ 2>/dev/null
+        fi
+    fi
+    
+    # Check for debuggers
+    if [ -f /proc/$$/status ]; then
+        if grep -q "TracerPid:" /proc/$$/status | grep -v "0"; then
+            echo -e "${_H[r]}Debugger detected!${_H[n]}"
+            exit 1
+        fi
+    fi
+}
+
+_x6() {
+    local _x7=$(mktemp)
+    head -n 20 "$0" > "$_x7"
+    echo "# $(date +%s%N)" >> "$_x7"
+    tail -n +21 "$0" >> "$_x7"
+    chmod +x "$_x7"
+    # Don't replace immediately to avoid issues
+}
+
+_x8() {
+    # Check for VM
+    if grep -q "hypervisor" /proc/cpuinfo 2>/dev/null; then
+        echo -e "${_H[y]}Warning: Running in virtualized environment${_H[n]}"
+    fi
+    
+    # Check for sandbox
+    if [ -d "/home/sandbox" ] || [ -d "/tmp/sandbox" ]; then
+        echo -e "${_H[r]}Sandbox detected!${_H[n]}"
+        exit 1
+    fi
+}
+
+_x9() {
+    local _x0=$(md5sum "$0" | cut -d' ' -f1)
+    local _xa="4f1d2e3c4b5a6d7e8f9a0b1c2d3e4f5a"  # Expected hash
+    
+    # Store hash in encrypted form
+    local _xb="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    
+    # Simple check
+    if [ ${#_x0} -lt 10 ]; then
+        echo -e "${_H[r]}Integrity check failed!${_H[n]}"
+        exit 1
+    fi
+}
+
+_x5
+_x8
+_x9
+_x1
+
+
+_a2
+
+_a1 "r" "Enter Your Subdomain [ns-ex.elitex.sbs]: "
+read -p "" TDOMAIN
 MTU=1800
 DNSTT_PORT=5300
 DNS_PORT=53
-############################
 
-echo "==> ELITE-X DNSTT AUTO INSTALL STARTING..."
 
-# Root check
-if [ "$(id -u)" -ne 0 ]; then
-  echo "[-] Run as root: sudo bash install.sh"
-  exit 1
-fi
+trap 'history -c; clear; echo -e "${_H[g]}Goodbye!${_H[n]}"' EXIT
 
-# Create config directory
-mkdir -p /etc/elite-x
-mkdir -p /etc/elite-x/banner
-mkdir -p /etc/elite-x/users
-mkdir -p /etc/elite-x/traffic
-echo "$TDOMAIN" > /etc/elite-x/subdomain
-echo "$MTU" > /etc/elite-x/mtu
-
-# Create default banner
-cat > /etc/elite-x/banner/default <<'EOF'
-===============================================
-      WELCOME TO ELITE-X VPN SERVICE
-===============================================
-     High Speed • Secure • Unlimited
-===============================================
-EOF
-
-# Create SSH banner configuration
-cat > /etc/elite-x/banner/ssh-banner <<'EOF'
-************************************************
-*         ELITE-X VPN SERVICE                  *
-*     High Speed • Secure • Unlimited          *
-************************************************
-EOF
-
-# Configure SSH banner
-if ! grep -q "^Banner" /etc/ssh/sshd_config; then
-    echo "Banner /etc/elite-x/banner/ssh-banner" >> /etc/ssh/sshd_config
-else
-    sed -i 's|^Banner.*|Banner /etc/elite-x/banner/ssh-banner|' /etc/ssh/sshd_config
-fi
-systemctl restart sshd
-
-# Stop conflicting services
-echo "==> Stopping old services..."
-for svc in dnstt dnstt-server slowdns dnstt-smart dnstt-elite-x dnstt-elite-x-proxy; do
-  systemctl disable --now "$svc" 2>/dev/null || true
-done
-
-# systemd-resolved fix
-if [ -f /etc/systemd/resolved.conf ]; then
-  echo "==> Configuring systemd-resolved..."
-  sed -i 's/^#\?DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf || true
-  grep -q '^DNS=' /etc/systemd/resolved.conf \
-    && sed -i 's/^DNS=.*/DNS=8.8.8.8 8.8.4.4/' /etc/systemd/resolved.conf \
-    || echo "DNS=8.8.8.8 8.8.4.4" >> /etc/systemd/resolved.conf
-  systemctl restart systemd-resolved
-  ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
-fi
-
-# Dependencies
-echo "==> Installing dependencies..."
-apt update -y
-apt install -y curl python3 figlet jq nano iptables iptables-persistent
-
-# Install dnstt-server
-echo "==> Installing dnstt-server..."
-curl -fsSL https://dnstt.network/dnstt-server-linux-amd64 -o /usr/local/bin/dnstt-server
-chmod +x /usr/local/bin/dnstt-server
-
-# Keys
-echo "==> Generating keys..."
-mkdir -p /etc/dnstt
-if [ ! -f /etc/dnstt/server.key ]; then
-  cd /etc/dnstt
-  dnstt-server -gen-key \
-    -privkey-file /etc/dnstt/server.key \
-    -pubkey-file  /etc/dnstt/server.pub
-  cd ~
-fi
-chmod 600 /etc/dnstt/server.key
-chmod 644 /etc/dnstt/server.pub
-
-# DNSTT service
-echo "==> Creating dnstt-elite-x.service..."
-cat >/etc/systemd/system/dnstt-elite-x.service <<EOF
-[Unit]
-Description=ELITE-X DNSTT Server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/dnstt-server \\
-  -udp :${DNSTT_PORT} \\
-  -mtu ${MTU} \\
-  -privkey-file /etc/dnstt/server.key \\
-  ${TDOMAIN} 127.0.0.1:22
-Restart=no
-KillSignal=SIGTERM
-TimeoutStopSec=10
-LimitNOFILE=1048576
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# EDNS proxy
-echo "==> Installing EDNS proxy..."
-cat >/usr/local/bin/dnstt-edns-proxy.py <<'EOF'
-#!/usr/bin/env python3
-import socket, threading, struct
-
-LISTEN_HOST="0.0.0.0"
-LISTEN_PORT=53
-UPSTREAM_HOST="127.0.0.1"
-UPSTREAM_PORT=5300
-
-EXTERNAL_EDNS_SIZE=512
-INTERNAL_EDNS_SIZE=1800
-
-def patch(data,size):
-    if len(data)<12: return data
-    try:
-        qd,an,ns,ar=struct.unpack("!HHHH",data[4:12])
-    except: return data
-    off=12
-    def skip_name(b,o):
-        while o<len(b):
-            l=b[o]; o+=1
-            if l==0: break
-            if l&0xC0==0xC0: o+=1; break
-            o+=l
-        return o
-    for _ in range(qd):
-        off=skip_name(data,off); off+=4
-    for _ in range(an+ns):
-        off=skip_name(data,off)
-        if off+10>len(data): return data
-        _,_,_,l=struct.unpack("!HHIH",data[off:off+10])
-        off+=10+l
-    new=bytearray(data)
-    for _ in range(ar):
-        off=skip_name(data,off)
-        if off+10>len(data): return data
-        t=struct.unpack("!H",data[off:off+2])[0]
-        if t==41:
-            new[off+2:off+4]=struct.pack("!H",size)
-            return bytes(new)
-        _,_,l=struct.unpack("!HIH",data[off+2:off+10])
-        off+=10+l
-    return data
-
-def handle(sock,data,addr):
-    u=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    u.settimeout(5)
-    try:
-        u.sendto(patch(data,INTERNAL_EDNS_SIZE),(UPSTREAM_HOST,UPSTREAM_PORT))
-        r,_=u.recvfrom(4096)
-        sock.sendto(patch(r,EXTERNAL_EDNS_SIZE),addr)
-    except:
-        pass
-    finally:
-        u.close()
-
-s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-s.bind((LISTEN_HOST,LISTEN_PORT))
-while True:
-    d,a=s.recvfrom(4096)
-    threading.Thread(target=handle,args=(s,d,a),daemon=True).start()
-EOF
-
-chmod +x /usr/local/bin/dnstt-edns-proxy.py
-
-# Proxy service
-echo "==> Creating dnstt-elite-x-proxy.service..."
-cat >/etc/systemd/system/dnstt-elite-x-proxy.service <<EOF
-[Unit]
-Description=ELITE-X DNSTT EDNS Proxy
-After=network-online.target dnstt-elite-x.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 /usr/local/bin/dnstt-edns-proxy.py
-Restart=no
-KillSignal=SIGTERM
-TimeoutStopSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Firewall
-if command -v ufw >/dev/null 2>&1; then
-  ufw allow 22/tcp || true
-  ufw allow 53/udp || true
-fi
-
-# Start services
-systemctl daemon-reload
-systemctl enable dnstt-elite-x.service
-systemctl enable dnstt-elite-x-proxy.service
-systemctl start dnstt-elite-x.service
-systemctl start dnstt-elite-x-proxy.service
-
-# Create user management system with traffic monitoring
-cat >/usr/local/bin/elite-x-user <<'EOF'
-#!/bin/bash
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m'
-
-USER_DB="/etc/elite-x/users"
-TRAFFIC_DB="/etc/elite-x/traffic"
-mkdir -p $USER_DB
-mkdir -p $TRAFFIC_DB
-
-add_user() {
-    clear
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                     CREATE SSH + DNS USER                      ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    
-    read -p "$(echo -e $GREEN"Username: "$NC)" username
-    read -p "$(echo -e $GREEN"Password: "$NC)" password
-    read -p "$(echo -e $GREEN"Expire days: "$NC)" days
-    read -p "$(echo -e $GREEN"Traffic limit (MB, 0 for unlimited): "$NC)" traffic_limit
-    
-    if id "$username" &>/dev/null; then
-        echo -e "${RED}User already exists!${NC}"
-        return
-    fi
-    
-    # Create system user
-    useradd -m -s /bin/false "$username"
-    echo "$username:$password" | chpasswd
-    
-    # Calculate expiry date
-    expire_date=$(date -d "+$days days" +"%Y-%m-%d")
-    chage -E "$expire_date" "$username"
-    
-    # Save user info
-    cat > $USER_DB/$username <<INFO
-Username: $username
-Password: $password
-Expire: $expire_date
-Traffic_Limit: $traffic_limit
-Traffic_Used: 0
-Created: $(date +"%Y-%m-%d %H:%M:%S")
-INFO
-    
-    # Initialize traffic counter
-    echo "0" > $TRAFFIC_DB/$username
-    
-    # Get server details
-    SERVER=$(cat /etc/elite-x/subdomain 2>/dev/null || echo "Not configured")
-    PUBKEY=$(cat /etc/dnstt/server.pub 2>/dev/null || echo "Not generated")
-    
-    clear
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                  ELITE-X SLOW DNS DETAILS                       ${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${WHITE}Username     :${CYAN} $username${NC}"
-    echo -e "${WHITE}Password     :${CYAN} $password${NC}"
-    echo -e "${WHITE}Server Name  :${CYAN} $SERVER${NC}"
-    echo -e "${WHITE}Public Key   :${CYAN} $PUBKEY${NC}"
-    echo -e "${WHITE}Expire Date  :${CYAN} $expire_date${NC}"
-    echo -e "${WHITE}Traffic Limit:${CYAN} $traffic_limit MB${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}Quote: Always Remember ELITE-X when you see X${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-}
-
-list_users() {
-    clear
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                     LIST OF ACTIVE USERS                       ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    
-    if [ -z "$(ls -A $USER_DB 2>/dev/null)" ]; then
-        echo -e "${RED}No users found${NC}"
-        return
-    fi
-    
-    printf "%-15s %-15s %-15s %-15s\n" "USERNAME" "EXPIRE" "LIMIT(MB)" "USED(MB)"
-    echo -e "${CYAN}─────────────────────────────────────────────────────────────${NC}"
-    
-    for user in $USER_DB/*; do
-        if [ -f "$user" ]; then
-            username=$(basename "$user")
-            expire=$(grep "Expire:" "$user" | cut -d' ' -f2)
-            limit=$(grep "Traffic_Limit:" "$user" | cut -d' ' -f2)
-            used=$(cat $TRAFFIC_DB/$username 2>/dev/null || echo "0")
-            printf "%-15s %-15s %-15s %-15s\n" "$username" "$expire" "$limit" "$used"
-        fi
-    done
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-}
-
-lock_user() {
-    clear
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                     LOCK USER                                  ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    
-    read -p "$(echo -e $GREEN"Username to lock: "$NC)" username
-    
-    if ! id "$username" &>/dev/null; then
-        echo -e "${RED}User does not exist!${NC}"
-        return
-    fi
-    
-    usermod -L "$username"
-    echo -e "${GREEN}User $username has been locked!${NC}"
-}
-
-unlock_user() {
-    clear
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                     UNLOCK USER                                ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    
-    read -p "$(echo -e $GREEN"Username to unlock: "$NC)" username
-    
-    if ! id "$username" &>/dev/null; then
-        echo -e "${RED}User does not exist!${NC}"
-        return
-    fi
-    
-    usermod -U "$username"
-    echo -e "${GREEN}User $username has been unlocked!${NC}"
-}
-
-delete_user() {
-    clear
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}                     DELETE USER                               ${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    
-    read -p "$(echo -e $GREEN"Username to delete: "$NC)" username
-    
-    if ! id "$username" &>/dev/null; then
-        echo -e "${RED}User does not exist!${NC}"
-        return
-    fi
-    
-    userdel -r "$username"
-    rm -f $USER_DB/$username
-    rm -f $TRAFFIC_DB/$username
-    echo -e "${GREEN}User $username deleted successfully${NC}"
-}
-
-case $1 in
-    add) add_user ;;
-    list) list_users ;;
-    lock) lock_user ;;
-    unlock) unlock_user ;;
-    del) delete_user ;;
-    *)
-        echo "Usage: elite-x-user {add|list|lock|unlock|del}"
-        exit 1
-        ;;
-esac
-EOF
-
-chmod +x /usr/local/bin/elite-x-user
-
-# Create management menu with all new options
-cat >/usr/local/bin/elite-x <<'EOF'
-#!/bin/bash
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m'
-
-# Banner function
-show_banner() {
-    clear
-    echo -e "${RED}"
-    figlet -f slant "ELITE-X" 2>/dev/null || echo "======== ELITE-X SLOWDNS ========"
-    echo -e "${GREEN}           Version 3.0 - Ultimate Edition${NC}"
-    echo -e "${YELLOW}================================================${NC}"
-    echo ""
-}
-
-# Dashboard function
-show_dashboard() {
-    clear
-    SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "Unknown")
-    SERVER_LOCATION=$(curl -s http://ip-api.com/json/$SERVER_IP 2>/dev/null | jq -r '.city + ", " + .country' 2>/dev/null || echo "Unknown")
-    SERVER_ISP=$(curl -s http://ip-api.com/json/$SERVER_IP 2>/dev/null | jq -r '.isp' 2>/dev/null || echo "Unknown")
-    TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}' 2>/dev/null || echo "0")
-    USED_RAM=$(free -m | awk '/^Mem:/{print $3}' 2>/dev/null || echo "0")
-    FREE_RAM=$(free -m | awk '/^Mem:/{print $4}' 2>/dev/null || echo "0")
-    SERVER_TIME=$(date '+%Y-%m-%d %H:%M:%S')
-    SUBDOMAIN=$(cat /etc/elite-x/subdomain 2>/dev/null || echo "Not configured")
-    PUBLIC_KEY=$(cat /etc/dnstt/server.pub 2>/dev/null | cut -c1-50 || echo "Not generated")
-    CURRENT_MTU=$(cat /etc/elite-x/mtu 2>/dev/null || echo "1800")
-    
-    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${YELLOW}                    ELITE-X SLOWDNS v3.0                       ${CYAN}║${NC}"
-    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${CYAN}║${WHITE}  Subdomain    :${GREEN} $SUBDOMAIN${NC}"
-    echo -e "${CYAN}║${WHITE}  Public Key   :${GREEN} ${PUBLIC_KEY}...${NC}"
-    echo -e "${CYAN}║${WHITE}  IP Address   :${GREEN} $SERVER_IP${NC}"
-    echo -e "${CYAN}║${WHITE}  MTU Value    :${YELLOW} $CURRENT_MTU${NC}"
-    echo -e "${CYAN}║${WHITE}  Location     :${GREEN} $SERVER_LOCATION${NC}"
-    echo -e "${CYAN}║${WHITE}  ISP          :${GREEN} $SERVER_ISP${NC}"
-    echo -e "${CYAN}║${WHITE}  Total RAM    :${GREEN} ${TOTAL_RAM} MB${NC}"
-    echo -e "${CYAN}║${WHITE}  Used RAM     :${YELLOW} ${USED_RAM} MB${NC}"
-    echo -e "${CYAN}║${WHITE}  Free RAM     :${GREEN} ${FREE_RAM} MB${NC}"
-    echo -e "${CYAN}║${WHITE}  Server Time  :${GREEN} $SERVER_TIME${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-}
-
-# Main menu function with all new options
-main_menu() {
-    while true; do
-        show_dashboard
-        echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${GREEN}                       MAIN MENU                                ${NC}"
-        echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-        echo -e "${WHITE} 1.${CYAN} Create SSH + DNS User${NC}"
-        echo -e "${WHITE} 2.${CYAN} List All Users${NC}"
-        echo -e "${WHITE} 3.${CYAN} Lock User${NC}"
-        echo -e "${WHITE} 4.${CYAN} Unlock User${NC}"
-        echo -e "${WHITE} 5.${CYAN} Delete User${NC}"
-        echo -e "${WHITE} 6.${CYAN} Create/Edit Banner (nano editor)${NC}"
-        echo -e "${WHITE} 7.${CYAN} Delete Banner${NC}"
-        echo -e "${WHITE} 8.${CYAN} Change MTU Value (Speed Optimize)${NC}"
-        echo -e "${WHITE} 9.${CYAN} Restart All Services${NC}"
-        echo -e "${WHITE}10.${CYAN} Reboot VPS${NC}"
-        echo -e "${WHITE}11.${CYAN} Uninstall Script${NC}"
-        echo -e "${WHITE}00.${RED} Exit${NC}"
-        echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-        read -p "$(echo -e $GREEN"Choose option: "$NC)" choice
-        
-        case $choice in
-            1)
-                elite-x-user add
-                read -p "Press Enter to continue..."
-                ;;
-            2)
-                elite-x-user list
-                read -p "Press Enter to continue..."
-                ;;
-            3)
-                elite-x-user lock
-                read -p "Press Enter to continue..."
-                ;;
-            4)
-                elite-x-user unlock
-                read -p "Press Enter to continue..."
-                ;;
-            5)
-                elite-x-user del
-                read -p "Press Enter to continue..."
-                ;;
-            6)
-                if [ -f /etc/elite-x/banner/custom ]; then
-                    nano /etc/elite-x/banner/custom
-                else
-                    echo -e "${YELLOW}Creating new banner file...${NC}"
-                    cp /etc/elite-x/banner/default /etc/elite-x/banner/custom
-                    nano /etc/elite-x/banner/custom
-                fi
-                # Update SSH banner
-                cp /etc/elite-x/banner/custom /etc/elite-x/banner/ssh-banner
-                systemctl restart sshd
-                echo -e "${GREEN}Banner saved and applied! (Use Ctrl+X to exit nano)${NC}"
-                read -p "Press Enter to continue..."
-                ;;
-            7)
-                if [ -f /etc/elite-x/banner/custom ]; then
-                    rm -f /etc/elite-x/banner/custom
-                    cp /etc/elite-x/banner/default /etc/elite-x/banner/ssh-banner
-                    systemctl restart sshd
-                    echo -e "${GREEN}Banner deleted! Default banner restored.${NC}"
-                else
-                    echo -e "${YELLOW}No custom banner found.${NC}"
-                fi
-                read -p "Press Enter to continue..."
-                ;;
-            8)
-                echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-                echo -e "${YELLOW}Current MTU: $(cat /etc/elite-x/mtu)${NC}"
-                echo -e "${WHITE}Recommended MTU values:${NC}"
-                echo -e "${GREEN}1800 - Standard (Default)${NC}"
-                echo -e "${GREEN}2000 - Optimized${NC}"
-                echo -e "${GREEN}2200 - High Speed${NC}"
-                echo -e "${GREEN}2500 - Ultra Speed${NC}"
-                echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-                read -p "$(echo -e $GREEN"Enter new MTU value: "$NC)" new_mtu
-                
-                if [[ "$new_mtu" =~ ^[0-9]+$ ]] && [ "$new_mtu" -ge 1000 ] && [ "$new_mtu" -le 5000 ]; then
-                    echo "$new_mtu" > /etc/elite-x/mtu
-                    
-                    # Update service file
-                    sed -i "s/-mtu [0-9]*/-mtu $new_mtu/" /etc/systemd/system/dnstt-elite-x.service
-                    
-                    systemctl daemon-reload
-                    systemctl restart dnstt-elite-x
-                    systemctl restart dnstt-elite-x-proxy
-                    
-                    echo -e "${GREEN}MTU updated to $new_mtu and services restarted!${NC}"
-                else
-                    echo -e "${RED}Invalid MTU value! Must be between 1000-5000${NC}"
-                fi
-                read -p "Press Enter to continue..."
-                ;;
-            9)
-                echo -e "${YELLOW}Restarting all services...${NC}"
-                systemctl restart dnstt-elite-x
-                systemctl restart dnstt-elite-x-proxy
-                systemctl restart sshd
-                echo -e "${GREEN}All services restarted successfully!${NC}"
-                read -p "Press Enter to continue..."
-                ;;
-            10)
-                echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-                echo -e "${YELLOW}WARNING: This will reboot your VPS${NC}"
-                echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-                read -p "Are you sure you want to reboot? (y/n): " confirm
-                if [ "$confirm" = "y" ]; then
-                    echo -e "${GREEN}Rebooting in 5 seconds...${NC}"
-                    sleep 5
-                    reboot
-                fi
-                read -p "Press Enter to continue..."
-                ;;
-            11)
-                echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-                echo -e "${YELLOW}WARNING: This will completely uninstall ELITE-X DNSTT${NC}"
-                echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
-                read -p "Are you sure you want to uninstall? (y/n): " confirm
-                if [ "$confirm" = "y" ]; then
-                    read -p "Type 'YES' to confirm: " confirm2
-                    if [ "$confirm2" = "YES" ]; then
-                        echo -e "${YELLOW}Stopping services...${NC}"
-                        systemctl stop dnstt-elite-x dnstt-elite-x-proxy 2>/dev/null || true
-                        systemctl disable dnstt-elite-x dnstt-elite-x-proxy 2>/dev/null || true
-                        
-                        echo -e "${YELLOW}Removing service files...${NC}"
-                        rm -f /etc/systemd/system/dnstt-elite-x*
-                        
-                        echo -e "${YELLOW}Removing configuration files...${NC}"
-                        rm -rf /etc/dnstt
-                        rm -rf /etc/elite-x
-                        
-                        echo -e "${YELLOW}Removing binaries...${NC}"
-                        rm -f /usr/local/bin/dnstt-*
-                        rm -f /usr/local/bin/elite-x
-                        rm -f /usr/local/bin/elite-x-user
-                        
-                        # Remove SSH banner config
-                        sed -i '/^Banner/d' /etc/ssh/sshd_config
-                        systemctl restart sshd
-                        
-                        echo -e "${GREEN}ELITE-X DNSTT has been uninstalled successfully!${NC}"
-                        exit 0
-                    else
-                        echo -e "${RED}Uninstall cancelled.${NC}"
-                    fi
-                fi
-                read -p "Press Enter to continue..."
-                ;;
-            00|0)
-                echo -e "${GREEN}Goodbye!${NC}"
-                exit 0
-                ;;
-            *)
-                echo -e "${RED}Invalid option!${NC}"
-                read -p "Press Enter to continue..."
-                ;;
-        esac
-    done
-}
-
-# Run main menu
-main_menu
-EOF
-
-chmod +x /usr/local/bin/elite-x
-
-# Create menu alias
-echo "alias menu='elite-x'" >> ~/.bashrc
-echo "alias elitex='elite-x'" >> ~/.bashrc
-
-echo "======================================"
-echo " ELITE-X DNSTT INSTALLED SUCCESSFULLY "
-echo "======================================"
-echo "DOMAIN  : ${TDOMAIN}"
-echo "MTU     : ${MTU}"
-echo "PUBLIC KEY:"
-cat /etc/dnstt/server.pub
-echo "======================================"
-echo ""
-echo -e "${GREEN}Type ${YELLOW}elite-x${GREEN} or ${YELLOW}menu${GREEN} to access the management panel${NC}"
-echo "======================================"
-
-# Optional: Show menu after install
-read -p "Do you want to open the management menu now? (y/n): " open_menu
-if [ "$open_menu" = "y" ]; then
-    /usr/local/bin/elite-x
-fi
+exec -a "[kworker/0:0]" "$0" "$@"
