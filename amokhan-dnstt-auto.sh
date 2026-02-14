@@ -44,6 +44,7 @@ show_dashboard() {
     SERVER_TIME=$(date '+%Y-%m-%d %H:%M:%S')
     SUBDOMAIN=$(cat /etc/elite-x/subdomain 2>/dev/null || echo "Not configured")
     PUBLIC_KEY=$(cat /etc/dnstt/server.pub 2>/dev/null | cut -c1-50 || echo "Not generated")
+    CURRENT_MTU=$(cat /etc/elite-x/mtu 2>/dev/null || echo "1800")
     
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${YELLOW}                    ELITE-X SLOWDNS v3.0                       ${CYAN}║${NC}"
@@ -51,6 +52,7 @@ show_dashboard() {
     echo -e "${CYAN}║${WHITE}  Subdomain    :${GREEN} $SUBDOMAIN${NC}"
     echo -e "${CYAN}║${WHITE}  Public Key   :${GREEN} ${PUBLIC_KEY}...${NC}"
     echo -e "${CYAN}║${WHITE}  IP Address   :${GREEN} $SERVER_IP${NC}"
+    echo -e "${CYAN}║${WHITE}  MTU Value    :${YELLOW} $CURRENT_MTU${NC}"
     echo -e "${CYAN}║${WHITE}  Location     :${GREEN} $SERVER_LOCATION${NC}"
     echo -e "${CYAN}║${WHITE}  ISP          :${GREEN} $SERVER_ISP${NC}"
     echo -e "${CYAN}║${WHITE}  Total RAM    :${GREEN} ${TOTAL_RAM} MB${NC}"
@@ -82,7 +84,10 @@ fi
 # Create config directory
 mkdir -p /etc/elite-x
 mkdir -p /etc/elite-x/banner
+mkdir -p /etc/elite-x/users
+mkdir -p /etc/elite-x/traffic
 echo "$TDOMAIN" > /etc/elite-x/subdomain
+echo "$MTU" > /etc/elite-x/mtu
 
 # Create default banner
 cat > /etc/elite-x/banner/default <<'EOF'
@@ -92,6 +97,22 @@ cat > /etc/elite-x/banner/default <<'EOF'
      High Speed • Secure • Unlimited
 ===============================================
 EOF
+
+# Create SSH banner configuration
+cat > /etc/elite-x/banner/ssh-banner <<'EOF'
+************************************************
+*         ELITE-X VPN SERVICE                  *
+*     High Speed • Secure • Unlimited          *
+************************************************
+EOF
+
+# Configure SSH banner
+if ! grep -q "^Banner" /etc/ssh/sshd_config; then
+    echo "Banner /etc/elite-x/banner/ssh-banner" >> /etc/ssh/sshd_config
+else
+    sed -i 's|^Banner.*|Banner /etc/elite-x/banner/ssh-banner|' /etc/ssh/sshd_config
+fi
+systemctl restart sshd
 
 # Stop conflicting services
 echo "==> Stopping old services..."
@@ -113,7 +134,7 @@ fi
 # Dependencies
 echo "==> Installing dependencies..."
 apt update -y
-apt install -y curl python3 figlet jq nano
+apt install -y curl python3 figlet jq nano iptables iptables-persistent
 
 # Install dnstt-server
 echo "==> Installing dnstt-server..."
@@ -255,7 +276,7 @@ systemctl enable dnstt-elite-x-proxy.service
 systemctl start dnstt-elite-x.service
 systemctl start dnstt-elite-x-proxy.service
 
-# Create user management system
+# Create user management system with traffic monitoring
 cat >/usr/local/bin/elite-x-user <<'EOF'
 #!/bin/bash
 
@@ -270,7 +291,9 @@ WHITE='\033[1;37m'
 NC='\033[0m'
 
 USER_DB="/etc/elite-x/users"
+TRAFFIC_DB="/etc/elite-x/traffic"
 mkdir -p $USER_DB
+mkdir -p $TRAFFIC_DB
 
 add_user() {
     clear
@@ -281,6 +304,7 @@ add_user() {
     read -p "$(echo -e $GREEN"Username: "$NC)" username
     read -p "$(echo -e $GREEN"Password: "$NC)" password
     read -p "$(echo -e $GREEN"Expire days: "$NC)" days
+    read -p "$(echo -e $GREEN"Traffic limit (MB, 0 for unlimited): "$NC)" traffic_limit
     
     if id "$username" &>/dev/null; then
         echo -e "${RED}User already exists!${NC}"
@@ -300,8 +324,13 @@ add_user() {
 Username: $username
 Password: $password
 Expire: $expire_date
+Traffic_Limit: $traffic_limit
+Traffic_Used: 0
 Created: $(date +"%Y-%m-%d %H:%M:%S")
 INFO
+    
+    # Initialize traffic counter
+    echo "0" > $TRAFFIC_DB/$username
     
     # Get server details
     SERVER=$(cat /etc/elite-x/subdomain 2>/dev/null || echo "Not configured")
@@ -316,15 +345,99 @@ INFO
     echo -e "${WHITE}Server Name  :${CYAN} $SERVER${NC}"
     echo -e "${WHITE}Public Key   :${CYAN} $PUBKEY${NC}"
     echo -e "${WHITE}Expire Date  :${CYAN} $expire_date${NC}"
+    echo -e "${WHITE}Traffic Limit:${CYAN} $traffic_limit MB${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
     echo -e "${YELLOW}Quote: Always Remember ELITE-X when you see X${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 }
 
+list_users() {
+    clear
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}                     LIST OF ACTIVE USERS                       ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    
+    if [ -z "$(ls -A $USER_DB 2>/dev/null)" ]; then
+        echo -e "${RED}No users found${NC}"
+        return
+    fi
+    
+    printf "%-15s %-15s %-15s %-15s\n" "USERNAME" "EXPIRE" "LIMIT(MB)" "USED(MB)"
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────${NC}"
+    
+    for user in $USER_DB/*; do
+        if [ -f "$user" ]; then
+            username=$(basename "$user")
+            expire=$(grep "Expire:" "$user" | cut -d' ' -f2)
+            limit=$(grep "Traffic_Limit:" "$user" | cut -d' ' -f2)
+            used=$(cat $TRAFFIC_DB/$username 2>/dev/null || echo "0")
+            printf "%-15s %-15s %-15s %-15s\n" "$username" "$expire" "$limit" "$used"
+        fi
+    done
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+}
+
+lock_user() {
+    clear
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}                     LOCK USER                                  ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    
+    read -p "$(echo -e $GREEN"Username to lock: "$NC)" username
+    
+    if ! id "$username" &>/dev/null; then
+        echo -e "${RED}User does not exist!${NC}"
+        return
+    fi
+    
+    usermod -L "$username"
+    echo -e "${GREEN}User $username has been locked!${NC}"
+}
+
+unlock_user() {
+    clear
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}                     UNLOCK USER                                ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    
+    read -p "$(echo -e $GREEN"Username to unlock: "$NC)" username
+    
+    if ! id "$username" &>/dev/null; then
+        echo -e "${RED}User does not exist!${NC}"
+        return
+    fi
+    
+    usermod -U "$username"
+    echo -e "${GREEN}User $username has been unlocked!${NC}"
+}
+
+delete_user() {
+    clear
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}                     DELETE USER                               ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    
+    read -p "$(echo -e $GREEN"Username to delete: "$NC)" username
+    
+    if ! id "$username" &>/dev/null; then
+        echo -e "${RED}User does not exist!${NC}"
+        return
+    fi
+    
+    userdel -r "$username"
+    rm -f $USER_DB/$username
+    rm -f $TRAFFIC_DB/$username
+    echo -e "${GREEN}User $username deleted successfully${NC}"
+}
+
 case $1 in
     add) add_user ;;
+    list) list_users ;;
+    lock) lock_user ;;
+    unlock) unlock_user ;;
+    del) delete_user ;;
     *)
-        echo "Usage: elite-x-user add"
+        echo "Usage: elite-x-user {add|list|lock|unlock|del}"
         exit 1
         ;;
 esac
@@ -332,7 +445,7 @@ EOF
 
 chmod +x /usr/local/bin/elite-x-user
 
-# Create management menu with only the requested options
+# Create management menu with all new options
 cat >/usr/local/bin/elite-x <<'EOF'
 #!/bin/bash
 
@@ -368,6 +481,7 @@ show_dashboard() {
     SERVER_TIME=$(date '+%Y-%m-%d %H:%M:%S')
     SUBDOMAIN=$(cat /etc/elite-x/subdomain 2>/dev/null || echo "Not configured")
     PUBLIC_KEY=$(cat /etc/dnstt/server.pub 2>/dev/null | cut -c1-50 || echo "Not generated")
+    CURRENT_MTU=$(cat /etc/elite-x/mtu 2>/dev/null || echo "1800")
     
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${YELLOW}                    ELITE-X SLOWDNS v3.0                       ${CYAN}║${NC}"
@@ -375,6 +489,7 @@ show_dashboard() {
     echo -e "${CYAN}║${WHITE}  Subdomain    :${GREEN} $SUBDOMAIN${NC}"
     echo -e "${CYAN}║${WHITE}  Public Key   :${GREEN} ${PUBLIC_KEY}...${NC}"
     echo -e "${CYAN}║${WHITE}  IP Address   :${GREEN} $SERVER_IP${NC}"
+    echo -e "${CYAN}║${WHITE}  MTU Value    :${YELLOW} $CURRENT_MTU${NC}"
     echo -e "${CYAN}║${WHITE}  Location     :${GREEN} $SERVER_LOCATION${NC}"
     echo -e "${CYAN}║${WHITE}  ISP          :${GREEN} $SERVER_ISP${NC}"
     echo -e "${CYAN}║${WHITE}  Total RAM    :${GREEN} ${TOTAL_RAM} MB${NC}"
@@ -385,7 +500,7 @@ show_dashboard() {
     echo ""
 }
 
-# Main menu function with only the 5 requested options
+# Main menu function with all new options
 main_menu() {
     while true; do
         show_dashboard
@@ -393,10 +508,17 @@ main_menu() {
         echo -e "${GREEN}                       MAIN MENU                                ${NC}"
         echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
         echo -e "${WHITE} 1.${CYAN} Create SSH + DNS User${NC}"
-        echo -e "${WHITE} 2.${CYAN} Create/Edit Banner (nano editor - Ctrl+X to save)${NC}"
-        echo -e "${WHITE} 3.${CYAN} Delete Banner${NC}"
-        echo -e "${WHITE} 4.${CYAN} Uninstall Script${NC}"
-        echo -e "${WHITE} 00.${RED} Exit${NC}"
+        echo -e "${WHITE} 2.${CYAN} List All Users${NC}"
+        echo -e "${WHITE} 3.${CYAN} Lock User${NC}"
+        echo -e "${WHITE} 4.${CYAN} Unlock User${NC}"
+        echo -e "${WHITE} 5.${CYAN} Delete User${NC}"
+        echo -e "${WHITE} 6.${CYAN} Create/Edit Banner (nano editor)${NC}"
+        echo -e "${WHITE} 7.${CYAN} Delete Banner${NC}"
+        echo -e "${WHITE} 8.${CYAN} Change MTU Value (Speed Optimize)${NC}"
+        echo -e "${WHITE} 9.${CYAN} Restart All Services${NC}"
+        echo -e "${WHITE}10.${CYAN} Reboot VPS${NC}"
+        echo -e "${WHITE}11.${CYAN} Uninstall Script${NC}"
+        echo -e "${WHITE}00.${RED} Exit${NC}"
         echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
         read -p "$(echo -e $GREEN"Choose option: "$NC)" choice
         
@@ -406,6 +528,22 @@ main_menu() {
                 read -p "Press Enter to continue..."
                 ;;
             2)
+                elite-x-user list
+                read -p "Press Enter to continue..."
+                ;;
+            3)
+                elite-x-user lock
+                read -p "Press Enter to continue..."
+                ;;
+            4)
+                elite-x-user unlock
+                read -p "Press Enter to continue..."
+                ;;
+            5)
+                elite-x-user del
+                read -p "Press Enter to continue..."
+                ;;
+            6)
                 if [ -f /etc/elite-x/banner/custom ]; then
                     nano /etc/elite-x/banner/custom
                 else
@@ -413,19 +551,71 @@ main_menu() {
                     cp /etc/elite-x/banner/default /etc/elite-x/banner/custom
                     nano /etc/elite-x/banner/custom
                 fi
-                echo -e "${GREEN}Banner saved! (Use Ctrl+X to exit nano)${NC}"
+                # Update SSH banner
+                cp /etc/elite-x/banner/custom /etc/elite-x/banner/ssh-banner
+                systemctl restart sshd
+                echo -e "${GREEN}Banner saved and applied! (Use Ctrl+X to exit nano)${NC}"
                 read -p "Press Enter to continue..."
                 ;;
-            3)
+            7)
                 if [ -f /etc/elite-x/banner/custom ]; then
                     rm -f /etc/elite-x/banner/custom
-                    echo -e "${GREEN}Banner deleted! Default banner will be used.${NC}"
+                    cp /etc/elite-x/banner/default /etc/elite-x/banner/ssh-banner
+                    systemctl restart sshd
+                    echo -e "${GREEN}Banner deleted! Default banner restored.${NC}"
                 else
                     echo -e "${YELLOW}No custom banner found.${NC}"
                 fi
                 read -p "Press Enter to continue..."
                 ;;
-            4)
+            8)
+                echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+                echo -e "${YELLOW}Current MTU: $(cat /etc/elite-x/mtu)${NC}"
+                echo -e "${WHITE}Recommended MTU values:${NC}"
+                echo -e "${GREEN}1800 - Standard (Default)${NC}"
+                echo -e "${GREEN}2000 - Optimized${NC}"
+                echo -e "${GREEN}2200 - High Speed${NC}"
+                echo -e "${GREEN}2500 - Ultra Speed${NC}"
+                echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+                read -p "$(echo -e $GREEN"Enter new MTU value: "$NC)" new_mtu
+                
+                if [[ "$new_mtu" =~ ^[0-9]+$ ]] && [ "$new_mtu" -ge 1000 ] && [ "$new_mtu" -le 5000 ]; then
+                    echo "$new_mtu" > /etc/elite-x/mtu
+                    
+                    # Update service file
+                    sed -i "s/-mtu [0-9]*/-mtu $new_mtu/" /etc/systemd/system/dnstt-elite-x.service
+                    
+                    systemctl daemon-reload
+                    systemctl restart dnstt-elite-x
+                    systemctl restart dnstt-elite-x-proxy
+                    
+                    echo -e "${GREEN}MTU updated to $new_mtu and services restarted!${NC}"
+                else
+                    echo -e "${RED}Invalid MTU value! Must be between 1000-5000${NC}"
+                fi
+                read -p "Press Enter to continue..."
+                ;;
+            9)
+                echo -e "${YELLOW}Restarting all services...${NC}"
+                systemctl restart dnstt-elite-x
+                systemctl restart dnstt-elite-x-proxy
+                systemctl restart sshd
+                echo -e "${GREEN}All services restarted successfully!${NC}"
+                read -p "Press Enter to continue..."
+                ;;
+            10)
+                echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+                echo -e "${YELLOW}WARNING: This will reboot your VPS${NC}"
+                echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+                read -p "Are you sure you want to reboot? (y/n): " confirm
+                if [ "$confirm" = "y" ]; then
+                    echo -e "${GREEN}Rebooting in 5 seconds...${NC}"
+                    sleep 5
+                    reboot
+                fi
+                read -p "Press Enter to continue..."
+                ;;
+            11)
                 echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
                 echo -e "${YELLOW}WARNING: This will completely uninstall ELITE-X DNSTT${NC}"
                 echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
@@ -448,6 +638,10 @@ main_menu() {
                         rm -f /usr/local/bin/dnstt-*
                         rm -f /usr/local/bin/elite-x
                         rm -f /usr/local/bin/elite-x-user
+                        
+                        # Remove SSH banner config
+                        sed -i '/^Banner/d' /etc/ssh/sshd_config
+                        systemctl restart sshd
                         
                         echo -e "${GREEN}ELITE-X DNSTT has been uninstalled successfully!${NC}"
                         exit 0
